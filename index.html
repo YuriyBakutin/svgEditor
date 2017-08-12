@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Bezzier curve test</title>
+    <meta charset="utf-8">
+    <style>
+body {
+  margin: 0px 0px;
+  cursor: default;
+}
+    </style>
+  </head>
+  <body>
+    <input hidden="true" id="fileDialog" type="file" nwsaveas />
+    <div id="LSVG_frame">
+    </div>
+    <div>
+      <button onclick="addBezier()">Random Bezier</button>
+      <button onclick="addSegment()">Random Line</button>
+      <button onclick="clearSelected()">Delete</button>
+      <button onclick="clearAll()">Clear</button>
+    </div>
+    <script type="text/JavaScript" src="./LSVG_modules/BaseGeometry.js"></script>
+    <script type="text/JavaScript" src="./LSVG_modules/LSVGContainer.js"></script>
+    <script type="text/JavaScript" src="./LSVG_modules/SVGCanvas.js"></script>
+    <script type="text/JavaScript" src="./LSVG_modules/LSVGGroup.js"></script>
+    <script type="text/JavaScript" src="./LSVG_modules/LSVGPrimitive.js"></script>
+    <script type="text/JavaScript" src="./LSVG_modules/Line.js"></script>
+    <script type="text/JavaScript" src="./LSVG_modules/HintLine.js"></script>
+    <script type="text/JavaScript" src="./LSVG_modules/Bezier.js"></script>
+    <script type="text/JavaScript" src="./LSVG_modules/PointMarker.js"></script>
+    <script type="text/JavaScript" src="./LSVG_modules/LSVGWidget.js"></script>
+    <script type="text/JavaScript" src="./LSVG_modules/SegmentWidget.js"></script>
+    <script type="text/JavaScript" src="./LSVG_modules/BezierWidget.js"></script>
+    <script type="text/JavaScript" src="./App.js"></script>
+  </body>
+</html>

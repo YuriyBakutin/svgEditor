@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Bezzier curve test</title>
+    <meta charset="utf-8">
+    <link rel="icon" type="image/vnd.microsoft.icon" href="./ico1.png">
+    <style>
+body {
+  margin: 0px 0px;
+  cursor: default;
+}
+    </style>
+  </head>
+  <body>
+    <input hidden="true" id="fileDialog" type="file" nwsaveas />
+    <div id="LSVG_frame">
+    </div>
+    <div>
+      <button onclick="addBezier()">Random Bezier</button>
+      <button onclick="addSegment()">Random Line</button>
+      <button onclick="clearSelected()">Delete</button>
+      <button onclick="clearAll()">Clear</button>
+<!--
+      <button onclick="base_canvas.save()">Сохранить</button>
+      <button onclick="open_lsvg()">Открыть</button>
+-->
+    </div>
+    <script type="text/JavaScript">
+"use strict";
+
+class Point {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+  }
+}
+
+
+class Vector {
+  constructor(point_from, point_to) {
+    this.x = point_to.x - point_from.x;
+    this.y = point_to.y - point_from.y;
+  }
+}
+
+function distance(point0, point1) {
+  let d = new Vector(point0, point1);
+  return Math.sqrt(d.x * d.x + d.y * d.y);
+}
+
+class LSVGContainer {
+  constructor() {
+    this.lsvg_canvas = undefined;
+    this.id = undefined;
+    this._children = new Array();
+    this._lsvg_head = undefined;
+    this._lsvg_tail = undefined;
+    this._lsvg_content = undefined;
+    this.parent_lsvg_container = undefined;
+  }
+
+  get_lsvg_content(for_save = false) {
+    this._lsvg_content = this._lsvg_head;
+
+    for(let child of this._children) {
+      if(for_save && child.not_for_save) {
+        continue;
+      }
+      this._lsvg_content += child.get_lsvg_content(for_save);
+
+      if( !(child instanceof HintLine ||
+            child instanceof PointMarker ||
+            child instanceof LSVGContainer ))
+      {
+        let point_string = "";
+        for(let point of child.points) {
+          this.lsvg_canvas.all_cap_points.push(point);
+        }
+      }
+    }
+    this._lsvg_content += this._lsvg_tail;
+    return this._lsvg_content;
+  }
+
+  registry(svg_object) {
+    svg_object.id = this.id + "_" + this._children.length;
+    this._children.push(svg_object);
+    this.lsvg_canvas._elements[svg_object.id] = svg_object;
+  }
+
+  to_top(element) {
+    this._children.splice(this._children.indexOf(element), 1);
+    this._children.push(element);
+    if (this.parent_lsvg_container) {
+      this.parent_lsvg_container.to_top(this);
+    }
+  }
+}
+
+class SVGCanvas extends LSVGContainer {
+  constructor(width, height, html_container_id) {
+    super();
+    this.lsvg_canvas = this;
+    this.id = html_container_id + "_";
+
+    this._elements = new Object(); // Словарь элементов с ключом id.
+    this._elements[this.id] = this;
+
+    this.width = width;
+    this.height = height;
+
+    this.snaping = true;
+    this.snaping_radius = 6;
+    this.all_cap_points = new Array;
+
+
+    this._html_container = window.document.getElementById(html_container_id);
+    this._html_container.addEventListener("mousedown", this.SVGCanvas_onmousedown.bind(this));
+    this._html_container.addEventListener("mousemove", this.SVGCanvas_onmousemove.bind(this));
+    this._html_container.addEventListener("mouseup", this.SVGCanvas_onmouseup.bind(this));
+    this._html_container.addEventListener("click", this.SVGCanvas_onclick.bind(this));
+
+    this.moving_point_marker = undefined;
+    this.moving_point_marker_shift = undefined;
+
+    this._lsvg_head = `
+<svg xmlns="http://www.w3.org/2000/svg"
+     xml:space="preserve"
+     width="${width}px"
+     height="${height}px"
+     version="1.1"
+     style="shape-rendering:geometricPrecision; fill-rule:evenodd; clip-rule:evenodd"
+     viewbox="0 0 ${width} ${height}"
+     xmlns:xlink="http://www.w3.org/1999/xlink
+     FunnyWorms:version="0.01 alpha"
+>
+  <style>
+    @charset "UTF-8";
+    .backgrownd {fill:#c0c0c0; stroke:none;}
+    .str_black {stroke:black}
+    .str3 {stroke-width:3; fill:none}
+    .str2 {stroke-width:2; fill:none}
+    .str1 {stroke-width:1; fill:none}
+    .css_hint_line {stroke:red;stroke-width:2}
+    .css_point_marker {fill:red;}
+    .css_selected_point_marker {fill:red;}
+  </style>
+  <g>
+    <rect id="${this.id}"
+          x="0" y="0"
+          width="${width}"
+          height="${height}"
+          class="backgrownd" />`;
+    this._lsvg_tail = `
+  </g>
+</svg>`;
+  }
+
+  SVGCanvas_onmousedown(event) {
+    let target_element = this._elements[event.target.id];
+    let event_page_point = new Point(event.pageX, event.pageY)
+    if(target_element instanceof PointMarker){
+      this.moving_point_marker = target_element;
+      target_element.select();
+      this.moving_point_marker_shift = new Vector(event_page_point, target_element.control_point);
+    }
+  }
+
+  SVGCanvas_onmousemove(event) {
+    if(this.moving_point_marker) {
+      let event_page_point = new Point(event.pageX, event.pageY)
+      let canvas_picker_point = new Point(event_page_point.x +
+                                   this.moving_point_marker_shift.x,
+                                   event_page_point.y +
+                                   this.moving_point_marker_shift.y
+                                  )
+      if(this.snaping) {
+        for(let point of this.all_cap_points) {
+          if(distance(point, canvas_picker_point) < this.snaping_radius) {
+            canvas_picker_point = point;
+            break;
+          }
+        }
+      }
+
+
+      let step_x = canvas_picker_point.x -
+          this.moving_point_marker.control_point.x;
+      let step_y = canvas_picker_point.y -
+          this.moving_point_marker.control_point.y;
+
+      this.moving_point_marker.control_point.x = canvas_picker_point.x;
+      this.moving_point_marker.control_point.y = canvas_picker_point.y;
+      for (let dependent of this.moving_point_marker.selection_dependences) {
+        dependent.control_point.x += step_x;
+        dependent.control_point.y += step_y;
+      }
+      this.paint();
+    }
+  }
+
+  SVGCanvas_onmouseup(event) {
+    if (this.moving_point_marker) {
+      this.moving_point_marker.deselect();
+      this.moving_point_marker = undefined;
+      this.paint();
+    }
+  }
+
+  SVGCanvas_onclick(event) {
+    let target_element = this._elements[event.target.id];
+    let target_widget = undefined;
+    if(target_element && target_element.parent_lsvg_container instanceof LSVGWidget){
+      target_widget = target_element.parent_lsvg_container;
+      target_widget.select();
+    }
+
+    for (let id in this._elements) {
+      let element = this._elements[id];
+      if (element == target_widget) {
+        continue;
+      }
+      if (element instanceof LSVGWidget && element.is_selected) {
+        element.deselect();
+      }
+    }
+  }
+
+  paint() {
+    this.all_cap_points.length = 0;
+    let content = this.get_lsvg_content();
+    this._html_container.innerHTML = content;
+  }
+
+  save() {
+    let for_save = true;
+    choose_path_and_save_File(this.get_lsvg_content(for_save));
+  }
+
+  deselect_all(repaint = "repaint") {
+    for (let id in this._elements) {
+      let element = this._elements[id];
+      if (element instanceof LSVGWidget && element.is_selected) {
+        element.deselect(repaint);
+      }
+    }
+  }
+
+  clearSelected() {
+    for (let id in this._elements) {
+      let element = this._elements[id];
+      if (element instanceof LSVGWidget && element.is_selected) {
+        // Удалить виджет из родительского контейнера _children (Array)
+        element.parent_lsvg_container._children.splice(this._children.indexOf(element), 1);
+        // удалить из словаря _elements (Object)
+        delete this._elements[id];
+      }
+    }
+    this.paint();
+  }
+
+
+  clearAll() {
+    this._children.length = 0;
+    this.paint();
+  }
+}
+
+class LSVGGroup extends LSVGContainer {
+  constructor(lsvg_canvas, parent_lsvg_container) {
+    super();
+    this.id = undefined;
+    this.visibility = "visble"
+    this.lsvg_canvas = lsvg_canvas;
+    this.parent_lsvg_container = parent_lsvg_container;
+    parent_lsvg_container.registry(this);
+    this._lsvg_head = `
+    <g id="${this.id}">`;
+          this._lsvg_tail = `
+    </g>`;
+  }
+}
+
+class LSVGPrimitive {
+  constructor(parent_lsvg_container, css_class) {
+    this.id = undefined;
+    this.css_class = css_class;
+    this.parent_lsvg_container = parent_lsvg_container;
+    parent_lsvg_container.registry(this);
+  }
+}
+
+class Line extends LSVGPrimitive {
+  constructor(parent_lsvg_container, start_point, end_point, css_class) {
+    super(parent_lsvg_container, css_class);
+    this.points = [start_point, end_point];
+  }
+
+  get_lsvg_content() {
+    let content = `
+      <line class="${this.css_class}"
+            stroke-linecap="round"
+            id="${this.id}"
+            x1="${this.points[0].x}"
+            y1="${this.points[0].y}"
+            x2="${this.points[1].x}"
+            y2="${this.points[1].y}" />`;
+    return content;
+  }
+}
+
+class HintLine extends Line {
+  constructor(parent_lsvg_container, start_point, end_point) {
+    super(parent_lsvg_container, start_point, end_point, "css_hint_line")
+    this.not_for_save = true;
+  }
+
+  get_lsvg_content() {
+    let content = `
+      <line class="${this.css_class}"
+            style="visibility:${this.parent_lsvg_container.controls_visibility}"
+            id="${this.id}"
+            x1="${this.points[0].x}"
+            y1="${this.points[0].y}"
+            x2="${this.points[1].x}"
+            y2="${this.points[1].y}" />`;
+    return content;
+  }
+}
+
+class Bezier extends LSVGPrimitive {
+  constructor(parent_lsvg_container, point0, point1, point2, point3, css_class) {
+    super(parent_lsvg_container, css_class);
+    this.points = [point0, point1, point2, point3];
+  }
+
+  get_lsvg_content() {
+    let content = `
+      <path class="${this.css_class}"
+            stroke-linecap="round"
+            id="${this.id}"` +
+`
+            d= "M${this.points[0].x} ${this.points[0].y}` +
+` C${this.points[1].x},${this.points[1].y}` +
+` ${this.points[2].x},${this.points[2].y}` +
+` ${this.points[3].x},${this.points[3].y}"/>`;
+    return content;
+  }
+}
+
+class PointMarker extends LSVGPrimitive {
+  constructor(parent_lsvg_container, control_point) {
+    super(parent_lsvg_container, "css_point_marker");
+    this.not_for_save = true;
+    this.control_point = control_point;
+    this.selection_dependences = new Array();
+  }
+
+  get_lsvg_content() {
+    let content =  `
+<circle class="${this.css_class}"
+        style="visibility:${this.parent_lsvg_container.controls_visibility}"
+        id="${this.id}"
+        cx="${this.control_point.x}"
+        cy="${this.control_point.y}"
+        r="${PointMarker.radius}" />`;
+    return content;
+  }
+
+  static get radius() {
+    return 4;
+  }
+
+  select() {
+    this.css_class = "css_selected_point_marker";
+    for (let elem of this.selection_dependences) {
+      elem.css_class = this.css_class;
+    }
+  }
+
+  deselect() {
+    this.css_class = "css_point_marker";
+    for (let elem of this.selection_dependences) {
+      elem.css_class = this.css_class;
+    }
+  }
+}
+
+class LSVGWidget extends LSVGGroup {
+  constructor(lsvg_canvas, parent_lsvg_container) {
+    super(lsvg_canvas, parent_lsvg_container);
+    this.controls_visibility = "hidden";
+    this.is_selected = false;
+  }
+
+  select(repaint = "repaint") {
+    this.is_selected = true;
+    this.parent_lsvg_container.to_top(this);
+    this.controls_visibility = "visible";
+    if(repaint === "repaint") {
+      this.lsvg_canvas.paint();
+    }
+  }
+
+  deselect(repaint = "repaint") {
+    this.is_selected = false;
+    this.controls_visibility = "hidden";
+    for (let child of this._children) {
+      if (child.css_class === "css_point_marker") {
+        child.deselect();
+      }
+    }
+    if(repaint === "repaint") {
+      this.lsvg_canvas.paint();
+    }
+  }
+}
+
+class SegmentWidget extends LSVGWidget {
+  constructor(lsvg_canvas, parent_lsvg_container, point0, point1, css_class) {
+    super(lsvg_canvas, parent_lsvg_container);
+    this.point0 = point0;
+    this.point1 = point1;
+    this.segment = new Line(this, point0, point1, css_class);
+    this.point_marker0 = new PointMarker(this, point0);
+    this.point_marker1 = new PointMarker(this, point1);
+  }
+}
+
+class BezierWidget extends LSVGWidget {
+  constructor(lsvg_canvas, parent_lsvg_container, point0, point1, point2, point3, css_class) {
+    super(lsvg_canvas, parent_lsvg_container);
+    this.point0 = point0;
+    this.point1 = point1;
+    this.point2 = point2;
+    this.point3 = point3;
+    this.bezier_path = new Bezier(this, point0, point1, point2, point3, css_class);
+
+    this.control_segment01 = new HintLine(this, point0, point1);
+    this.control_segment32 = new HintLine(this, point3, point2);
+
+    this.point_marker0 = new PointMarker(this, point0);
+    this.point_marker1 = new PointMarker(this, point1);
+    this.point_marker0.selection_dependences.push(this.point_marker1)
+
+    this.point_marker2 = new PointMarker(this, point2);
+    this.point_marker3 = new PointMarker(this, point3);
+    this.point_marker3.selection_dependences.push(this.point_marker2)
+  }
+}
+
+let first = true;
+
+
+//let fs = require('fs');
+
+function choose_path_and_save_File(content_to_save) {
+/*
+  let chooser = document.getElementById("fileDialog");
+  chooser.addEventListener("change", (function(evt) {
+    let chooser = document.getElementById("fileDialog");
+    if (chooser.value) {
+      fs.writeFileSync(chooser.value, content_to_save);
+      chooser.value = undefined;
+    }
+  }).bind(this), false);
+  chooser.click();
+*/
+}
+
+
+function get_random(min, max){
+  return Math.round(Math.random() * (max - min) + min);
+}
+
+function addSegment() {
+  base_canvas.deselect_all("no_repaint");
+  let p = [];
+  let x;
+  let y;
+  let x_max = base_canvas.width;
+  let y_max = base_canvas.height;
+
+  for (let i = 0; i < 2; i++) {
+    x = get_random(PointMarker.radius, x_max-PointMarker.radius);
+    y = get_random(PointMarker.radius, y_max-PointMarker.radius);
+    let point = new Point(x, y);
+    p.push(point)
+  }
+  let segment_widget = new SegmentWidget(base_canvas, base_canvas, p[0], p[1], "str_black str3");
+  segment_widget.select("no_repaint");
+  base_canvas.paint();
+}
+
+function addBezier() {
+  base_canvas.deselect_all("no_repaint");
+  let p = [];
+  let x;
+  let y;
+  let x_max = base_canvas.width;
+  let y_max = base_canvas.height;
+  for (let i = 0; i < 4; i++) {
+    x = get_random(PointMarker.radius, x_max-PointMarker.radius);
+    y = get_random(PointMarker.radius, y_max-PointMarker.radius);
+    let point = new Point(x, y);
+    p.push(point)
+  }
+  let bezier_widget = new BezierWidget(base_canvas, base_canvas, p[0], p[1], p[2], p[3], "str_black str3");
+  bezier_widget.select("no_repaint");
+  base_canvas.paint();
+}
+
+function clearSelected() {
+  base_canvas.clearSelected();
+}
+
+function clearAll() {
+  base_canvas.clearAll();
+}
+
+function open_lsvg() {
+
+}
+
+let base_canvas = new SVGCanvas(640, 480, "LSVG_frame");
+
+window.onload = function() {
+  base_canvas.paint();
+}
+
+    </script>
+  </body>
+</html>
