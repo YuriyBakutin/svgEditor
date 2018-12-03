@@ -1,5 +1,5 @@
 class SVGCanvas extends LSVGContainer {
-  constructor(width, height, html_container_id) {
+  constructor(width, height, html_container_id, snapping = true) {
     super();
     this.lsvg_canvas = this;
     this.id = html_container_id + "_";
@@ -10,8 +10,8 @@ class SVGCanvas extends LSVGContainer {
     this.width = width;
     this.height = height;
 
-    this.snaping = true;
-    this.snaping_radius = 6;
+    this.snapping = snapping;
+    this.snapping_radius = 6;
     this.all_cap_points = new Array;
 
 
@@ -60,7 +60,7 @@ class SVGCanvas extends LSVGContainer {
   SVGCanvas_onmousedown(event) {
     let target_element = this._elements[event.target.id];
     let event_page_point = new Point(event.pageX, event.pageY)
-    if(target_element instanceof PointMarker){
+    if (target_element instanceof PointMarker) {
       this.moving_point_marker = target_element;
       target_element.select();
       this.moving_point_marker_shift = new Vector(event_page_point, target_element.control_point);
@@ -68,16 +68,16 @@ class SVGCanvas extends LSVGContainer {
   }
 
   SVGCanvas_onmousemove(event) {
-    if(this.moving_point_marker) {
+    if (this.moving_point_marker) {
       let event_page_point = new Point(event.pageX, event.pageY)
       let canvas_picker_point = new Point(event_page_point.x +
-                                   this.moving_point_marker_shift.x,
-                                   event_page_point.y +
-                                   this.moving_point_marker_shift.y
-                                  )
-      if(this.snaping) {
-        for(let point of this.all_cap_points) {
-          if(distance(point, canvas_picker_point) < this.snaping_radius) {
+        this.moving_point_marker_shift.x,
+        event_page_point.y +
+        this.moving_point_marker_shift.y
+      )
+      if (this.snapping) {
+        for (let point of this.all_cap_points) {
+          if (distance(point, canvas_picker_point) < this.snapping_radius) {
             canvas_picker_point = point;
             break;
           }
@@ -86,9 +86,9 @@ class SVGCanvas extends LSVGContainer {
 
 
       let step_x = canvas_picker_point.x -
-          this.moving_point_marker.control_point.x;
+        this.moving_point_marker.control_point.x;
       let step_y = canvas_picker_point.y -
-          this.moving_point_marker.control_point.y;
+        this.moving_point_marker.control_point.y;
 
       this.moving_point_marker.control_point.x = canvas_picker_point.x;
       this.moving_point_marker.control_point.y = canvas_picker_point.y;
@@ -101,11 +101,11 @@ class SVGCanvas extends LSVGContainer {
   }
 
 
-/*
-this.snaping = false;
-this.snaping_radius = 3;
-this.all_cap_points = new Array;
-*/
+  /*
+  this.snapping = false;
+  this.snapping_radius = 3;
+  this.all_cap_points = new Array;
+  */
 
 
 
@@ -121,11 +121,11 @@ this.all_cap_points = new Array;
   SVGCanvas_onclick(event) {
     let target_element = this._elements[event.target.id];
     let target_widget = undefined;
-    if(target_element && target_element.parent_lsvg_container instanceof LSVGWidget){
+    if (target_element && target_element.parent_lsvg_container instanceof LSVGWidget) {
       target_widget = target_element.parent_lsvg_container;
       target_widget.select();
     }
-   // Снимаем выделение с других выделенных виджетов.
+    // Снимаем выделение с других выделенных виджетов.
     for (let id in this._elements) {
       let element = this._elements[id];
       if (element == target_widget) {
@@ -138,10 +138,18 @@ this.all_cap_points = new Array;
   }
 
   paint() {
-//    alert(this.all_cap_points);
+    //    alert(this.all_cap_points);
     this.all_cap_points.length = 0;
     let content = this.get_lsvg_content();
     this._html_container.innerHTML = content;
+  }
+
+  snappingOn() {
+    this.snapping = true;
+  }
+
+  snappingOff() {
+    this.snapping = false;
   }
 
   save() {

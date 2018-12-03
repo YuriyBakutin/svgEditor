@@ -1,31 +1,31 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <title>Bezzier curve test</title>
-    <meta charset="utf-8">
-    <link rel="icon" type="image/vnd.microsoft.icon" href="./ico1.png">
-    <style>
-body {
-  margin: 0px 0px;
-  cursor: default;
-}
+
+<head>
+  <title>Bezzier curve test</title>
+  <meta charset="utf-8">
+  <link rel="icon" type="image/vnd.microsoft.icon" href="./ico1.png">
+  <style>
+    body {
+      margin: 0px 0px;
+      cursor: default;
+    }
     </style>
-  </head>
-  <body>
-    <input hidden="true" id="fileDialog" type="file" nwsaveas />
-    <div id="LSVG_frame">
-    </div>
-    <div>
-      <button onclick="addBezier()">Random Bezier</button>
-      <button onclick="addSegment()">Random Line</button>
-      <button onclick="clearSelected()">Delete</button>
-      <button onclick="clearAll()">Clear</button>
-<!--
-      <button onclick="base_canvas.save()">Сохранить</button>
-      <button onclick="open_lsvg()">Открыть</button>
--->
-    </div>
-    <script type="text/JavaScript">
+</head>
+
+<body>
+  <input hidden="true" id="fileDialog" type="file" nwsaveas />
+  <div id="LSVG_frame">
+  </div>
+  <div>
+    <button onclick="addBezier()">Random Bezier</button>
+    <button onclick="addSegment()">Random Line</button>
+    <button onclick="clearSelected()">Delete</button>
+    <button onclick="clearAll()">Clear</button>
+    <input type="checkbox" id="snapping" name="snapping" checked onclick="toggleSnapping()">
+    <label for="snapping">Snapping</label>
+  </div>
+  <script type="text/JavaScript">
 "use strict";
 
 class Point {
@@ -98,7 +98,7 @@ class LSVGContainer {
 }
 
 class SVGCanvas extends LSVGContainer {
-  constructor(width, height, html_container_id) {
+  constructor(width, height, html_container_id, snapping = true) {
     super();
     this.lsvg_canvas = this;
     this.id = html_container_id + "_";
@@ -109,8 +109,8 @@ class SVGCanvas extends LSVGContainer {
     this.width = width;
     this.height = height;
 
-    this.snaping = true;
-    this.snaping_radius = 6;
+    this.snapping = snapping;
+    this.snapping_radius = 6;
     this.all_cap_points = new Array;
 
 
@@ -174,9 +174,9 @@ class SVGCanvas extends LSVGContainer {
                                    event_page_point.y +
                                    this.moving_point_marker_shift.y
                                   )
-      if(this.snaping) {
+      if(this.snapping) {
         for(let point of this.all_cap_points) {
-          if(distance(point, canvas_picker_point) < this.snaping_radius) {
+          if(distance(point, canvas_picker_point) < this.snapping_radius) {
             canvas_picker_point = point;
             break;
           }
@@ -451,23 +451,7 @@ class BezierWidget extends LSVGWidget {
 
 let first = true;
 
-
-//let fs = require('fs');
-
-function choose_path_and_save_File(content_to_save) {
-/*
-  let chooser = document.getElementById("fileDialog");
-  chooser.addEventListener("change", (function(evt) {
-    let chooser = document.getElementById("fileDialog");
-    if (chooser.value) {
-      fs.writeFileSync(chooser.value, content_to_save);
-      chooser.value = undefined;
-    }
-  }).bind(this), false);
-  chooser.click();
-*/
-}
-
+let snapping = false;
 
 function get_random(min, max){
   return Math.round(Math.random() * (max - min) + min);
@@ -518,16 +502,23 @@ function clearAll() {
   base_canvas.clearAll();
 }
 
+function toggleSnapping() {
+  snapping = document.getElementById("snapping").checked;
+  base_canvas.snapping = snapping;
+}
+
 function open_lsvg() {
 
 }
 
-let base_canvas = new SVGCanvas(640, 480, "LSVG_frame");
+let base_canvas = new SVGCanvas(640, 480, "LSVG_frame", snapping);
 
 window.onload = function() {
   base_canvas.paint();
+  document.getElementById("snapping").checked = snapping;
 }
 
-    </script>
-  </body>
+  </script>
+</body>
+
 </html>
